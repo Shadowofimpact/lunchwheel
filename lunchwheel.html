@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spinning Wheel of Places</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .wheel-container {
+            position: relative;
+            width: 90vw;
+            height: 90vw;
+            max-width: 500px;
+            max-height: 500px;
+        }
+        #canvas {
+            transition: transform 5s cubic-bezier(0.25, 0.1, 0.25, 1);
+            width: 100%;
+            height: 100%;
+        }
+        .pointer {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 25px solid transparent;
+            border-right: 25px solid transparent;
+            border-top: 40px solid #dc2626; /* red-600 */
+            z-index: 10;
+        }
+        .pointer::after {
+            content: '';
+            position: absolute;
+            top: -45px;
+            left: -10px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            border: 4px solid #dc2626;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+    <div id="loading" class="flex flex-col items-center justify-center space-y-4">
+        <svg class="animate-spin -ml-1 mr-3 h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-lg">Loading places from Google Sheet...</p>
+    </div>
+
+    <div id="app" class="hidden flex flex-col items-center justify-center text-center space-y-6 w-full">
+        <h1 class="text-3xl md:text-4xl font-bold text-gray-800 dark:text-white">Where to next?</h1>
+        
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 items-center justify-center gap-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow w-full max-w-2xl">
+            <div class="flex items-center justify-center space-x-2">
+                <input type="checkbox" id="rainProofCheckbox" class="h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600">
+                <label for="rainProofCheckbox" class="font-medium text-gray-700 dark:text-gray-300">Rain proof</label>
+            </div>
+             <div class="flex items-center justify-center space-x-2">
+                <input type="checkbox" id="lateProofCheckbox" class="h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600">
+                <label for="lateProofCheckbox" class="font-medium text-gray-700 dark:text-gray-300">Late proof</label>
+            </div>
+             <div class="flex items-center justify-center space-x-2">
+                <input type="checkbox" id="airConCheckbox" class="h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600">
+                <label for="airConCheckbox" class="font-medium text-gray-700 dark:text-gray-300">Air-con</label>
+            </div>
+            <div class="flex items-center justify-center space-x-2">
+                <input type="checkbox" id="mwCarOkCheckbox" class="h-5 w-5 rounded text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:focus:ring-blue-600">
+                <label for="mwCarOkCheckbox" class="font-medium text-gray-700 dark:text-gray-300">MW car ok</label>
+            </div>
+             <div class="col-span-2 sm:col-span-1 md:col-span-1 flex items-center justify-center space-x-2">
+                <label for="typeFilter" class="font-medium text-gray-700 dark:text-gray-300">Type:</label>
+                <select id="typeFilter" class="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    <option>All</option>
+                    <option>Mall</option>
+                    <option>Hawker</option>
+                    <option>Standalone</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="wheel-container">
+            <div class="pointer"></div>
+            <canvas id="canvas" width="500" height="500"></canvas>
+        </div>
+
+        <button id="spinBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-full text-xl shadow-lg transform hover:scale-105 transition-all duration-200 ease-in-out disabled:bg-gray-400 disabled:cursor-not-allowed">
+            SPIN
+        </button>
+    </div>
+    
+    <!-- Result Modal -->
+    <div id="resultModal" class="hidden fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8 text-center max-w-xs w-full transform transition-all scale-95 opacity-0">
+            <h2 class="text-xl font-bold mb-3 text-gray-500 dark:text-gray-400">Congratulations!</h2>
+            <p id="resultText" class="text-3xl md:text-4xl font-extrabold text-blue-600 dark:text-blue-400 my-4"></p>
+            <button id="closeModal" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg">
+                Spin Again
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        // --- CONFIGURATION ---
+        const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1OaWvAh2H6OUZdKlyW7EJTM89exzXYU-QXeKkqebKcTo/export?format=csv&gid=1339115020';
+        const PLACE_COLUMN = 'Place';
+        const TYPE_COLUMN = 'Type';
+        const RAIN_PROOF_COLUMN = 'Rain-proof';
+        const LATE_PROOF_COLUMN = 'Late-proof';
+        const AIR_CON_COLUMN = 'Air-con';
+        const MW_CAR_OK_COLUMN = '≥2m';
+
+
+        // --- DOM ELEMENTS ---
+        const canvas = document.getElementById('canvas');
+        const spinBtn = document.getElementById('spinBtn');
+        const loadingDiv = document.getElementById('loading');
+        const appDiv = document.getElementById('app');
+        const rainProofCheckbox = document.getElementById('rainProofCheckbox');
+        const lateProofCheckbox = document.getElementById('lateProofCheckbox');
+        const airConCheckbox = document.getElementById('airConCheckbox');
+        const mwCarOkCheckbox = document.getElementById('mwCarOkCheckbox');
+        const typeFilter = document.getElementById('typeFilter');
+        const resultModal = document.getElementById('resultModal');
+        const resultText = document.getElementById('resultText');
+        const closeModalBtn = document.getElementById('closeModal');
+        const ctx = canvas.getContext('2d');
+
+        // --- STATE ---
+        let allOptions = []; // Stores all places from the sheet
+        let options = []; // Stores currently visible places on the wheel
+        let currentAngle = 0; // The wheel's resting angle in degrees
+        let isSpinning = false;
+        
+        // --- WHEEL COLORS ---
+        const colors = [
+            "#3b82f6", "#ef4444", "#22c55e", "#eab308", "#8b5cf6", "#ec4899",
+            "#10b981", "#f97316", "#6366f1", "#d946ef", "#06b6d4", "#f43f5e"
+        ];
+
+        /**
+         * Fetches and parses all data from the Google Sheet.
+         */
+        async function loadAllOptions() {
+            try {
+                const response = await fetch(SHEET_URL);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const csvText = await response.text();
+                const rows = csvText.split('\n').map(row => row.trim());
+                
+                const headers = rows[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                
+                const placeIndex = headers.findIndex(h => h === PLACE_COLUMN);
+                const typeIndex = headers.findIndex(h => h === TYPE_COLUMN);
+                const rainProofIndex = headers.findIndex(h => h === RAIN_PROOF_COLUMN);
+                const lateProofIndex = headers.findIndex(h => h === LATE_PROOF_COLUMN);
+                const airConIndex = headers.findIndex(h => h === AIR_CON_COLUMN);
+                const mwCarOkIndex = headers.findIndex(h => h === MW_CAR_OK_COLUMN);
+
+                if (placeIndex === -1) throw new Error(`Column "${PLACE_COLUMN}" not found.`);
+                if (typeIndex === -1) throw new Error(`Column "${TYPE_COLUMN}" not found.`);
+                if (rainProofIndex === -1) throw new Error(`Column "${RAIN_PROOF_COLUMN}" not found.`);
+                if (lateProofIndex === -1) throw new Error(`Column "${LATE_PROOF_COLUMN}" not found.`);
+                if (airConIndex === -1) throw new Error(`Column "${AIR_CON_COLUMN}" not found.`);
+                if (mwCarOkIndex === -1) throw new Error(`Column "${MW_CAR_OK_COLUMN}" not found. Please check sheet.`);
+
+                allOptions = rows.slice(1).map(row => {
+                    const values = row.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g).map(v => v.replace(/"/g, ''));
+                    return {
+                        place: values[placeIndex]?.trim(),
+                        type: values[typeIndex]?.trim(),
+                        rainProof: values[rainProofIndex]?.trim().toUpperCase() === 'Y',
+                        lateProof: values[lateProofIndex]?.trim().toUpperCase() === 'Y',
+                        airCon: values[airConIndex]?.trim().toUpperCase() === 'Y',
+                        mwCarOk: values[mwCarOkIndex]?.trim().toUpperCase() === 'Y'
+                    };
+                }).filter(opt => opt.place);
+
+                if (allOptions.length === 0) throw new Error(`No places found.`);
+
+                loadingDiv.classList.add('hidden');
+                appDiv.classList.remove('hidden');
+                filterAndDrawWheel();
+
+            } catch (error) {
+                console.error("Failed to load or parse sheet data:", error);
+                loadingDiv.innerHTML = `<p class="text-red-500 text-lg">Error: Could not load places. ${error.message}</p>`;
+            }
+        }
+
+        /**
+         * Filters the options based on the checkboxes and dropdown, then redraws the wheel.
+         */
+        function filterAndDrawWheel() {
+            const selectedType = typeFilter.value;
+            const isRainProof = rainProofCheckbox.checked;
+            const isLateProof = lateProofCheckbox.checked;
+            const isAirCon = airConCheckbox.checked;
+            const isMwCarOk = mwCarOkCheckbox.checked;
+
+            let filteredOptions = allOptions;
+
+            if (selectedType !== 'All') {
+                filteredOptions = filteredOptions.filter(opt => opt.type === selectedType);
+            }
+            if (isRainProof) {
+                filteredOptions = filteredOptions.filter(opt => opt.rainProof);
+            }
+            if (isLateProof) {
+                filteredOptions = filteredOptions.filter(opt => opt.lateProof);
+            }
+            if (isAirCon) {
+                filteredOptions = filteredOptions.filter(opt => opt.airCon);
+            }
+            if (isMwCarOk) {
+                filteredOptions = filteredOptions.filter(opt => opt.mwCarOk);
+            }
+            
+            options = filteredOptions.map(opt => opt.place);
+            
+            drawWheel();
+        }
+
+        /**
+         * Draws the spinning wheel on the canvas with the current options.
+         */
+        function drawWheel() {
+            const numOptions = options.length;
+            const arcSize = numOptions > 0 ? (2 * Math.PI) / numOptions : 2 * Math.PI;
+            
+            const dpr = window.devicePixelRatio || 1;
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+            
+            const centerX = rect.width / 2;
+            const centerY = rect.height / 2;
+            const radius = Math.min(centerX, centerY) * 0.95;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = `bold 14px ${getComputedStyle(document.body).fontFamily}`;
+
+            if (numOptions === 0) {
+                ctx.fillStyle = '#6b7280'; // gray-500
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('No matching options found.', centerX, centerY);
+                spinBtn.disabled = true;
+                return;
+            }
+            
+            spinBtn.disabled = false;
+
+            for (let i = 0; i < numOptions; i++) {
+                const angle = i * arcSize;
+                ctx.beginPath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, angle, angle + arcSize);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.save();
+                ctx.fillStyle = "white";
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle + arcSize / 2);
+                ctx.textAlign = "right";
+                ctx.textBaseline = "middle";
+                const text = options[i].length > 15 ? options[i].substring(0, 13) + '...' : options[i];
+                ctx.fillText(text, radius * 0.9, 0);
+                ctx.restore();
+            }
+        }
+        
+        function spin() {
+            if (isSpinning || options.length === 0) return;
+            isSpinning = true;
+            spinBtn.disabled = true;
+
+            const degreesToSpin = Math.floor(1800 + Math.random() * 1800);
+            const totalRotation = currentAngle + degreesToSpin;
+            canvas.style.transform = `rotate(${totalRotation}deg)`;
+
+            const finalAngle = totalRotation % 360;
+            const arcSizeDegrees = 360 / options.length;
+            const effectiveAngle = (270 - finalAngle + 360) % 360;
+            const winningIndex = Math.floor(effectiveAngle / arcSizeDegrees);
+            const winner = options[winningIndex];
+
+            currentAngle = totalRotation;
+            canvas.addEventListener('transitionend', onSpinEnd, { once: true });
+
+            setTimeout(() => { showResultModal(winner); }, 4500); 
+        }
+        
+        function onSpinEnd() {
+            isSpinning = false;
+            canvas.style.transition = 'none';
+            currentAngle %= 360;
+            canvas.style.transform = `rotate(${currentAngle}deg)`;
+            canvas.offsetHeight; 
+            canvas.style.transition = 'transform 5s cubic-bezier(0.25, 0.1, 0.25, 1)';
+        }
+
+        function showResultModal(winner) {
+            resultText.textContent = winner;
+            resultModal.classList.remove('hidden');
+            resultModal.classList.add('flex');
+            setTimeout(() => {
+                 resultModal.querySelector('div').style.transform = 'scale(1)';
+                 resultModal.querySelector('div').style.opacity = '1';
+            }, 10);
+        }
+        
+        function hideModal() {
+            const modalContent = resultModal.querySelector('div');
+            modalContent.style.transform = 'scale(0.95)';
+            modalContent.style.opacity = '0';
+            setTimeout(() => {
+                resultModal.classList.add('hidden');
+                resultModal.classList.remove('flex');
+                spinBtn.disabled = false;
+            }, 200);
+        }
+
+        function hideResultAndSpinAgain() {
+            const modalContent = resultModal.querySelector('div');
+            modalContent.style.transform = 'scale(0.95)';
+            modalContent.style.opacity = '0';
+            setTimeout(() => {
+                resultModal.classList.add('hidden');
+                resultModal.classList.remove('flex');
+                spin();
+            }, 200); 
+        }
+        
+        // --- INITIALIZATION ---
+        window.addEventListener('load', loadAllOptions);
+        window.addEventListener('resize', filterAndDrawWheel);
+        spinBtn.addEventListener('click', spin);
+        closeModalBtn.addEventListener('click', hideResultAndSpinAgain);
+        
+        // Add event listeners for all filters
+        [rainProofCheckbox, lateProofCheckbox, airConCheckbox, mwCarOkCheckbox, typeFilter].forEach(filter => {
+            filter.addEventListener('change', filterAndDrawWheel);
+        });
+        
+        resultModal.addEventListener('click', (event) => {
+            if (event.target === resultModal) hideModal();
+        });
+        
+    </script>
+</body>
+</html>
